@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121417">
+<title>Seer’s Vision</title>
+<style>
+/* Layout: one screen at a time (Scan or Collection) above a two-tab bottom bar. Dark look shared with Deck Clash. */
+:root{--bg:#121417;--panel:#1b1f24;--panel2:#0f1215;--line:#2c323a;--text:#e6e8eb;--dim:#9aa3ad;--acc:#6fb3ff;--accText:#0b1520;--good:#5ccf8a;--bad:#ff7a6b;--warn:#f3c55b;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+main{flex:1;position:relative;min-height:0}
+.screen{position:absolute;inset:0}
+.b{background:var(--acc);color:var(--accText);border:0;border-radius:10px;padding:11px 16px;font-weight:650;font-size:15px}
+.g{background:#2a3038;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:14px}
+.g.on{background:var(--acc);color:var(--accText);border-color:var(--acc);font-weight:650}
+.g.danger{color:var(--bad)}
+button:disabled{opacity:.45}
+input,select,textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px;font:inherit;width:100%}
+.dim{color:var(--dim)}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.num{font-variant-numeric:tabular-nums}
+
+/* tab bar */
+nav{display:flex;border-top:1px solid var(--line);background:var(--bg);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;border:0;color:var(--dim);padding:12px 6px;font-size:14px;font-weight:600;border-top:2px solid transparent}
+nav button.on{color:var(--acc);border-top-color:var(--acc)}
+nav .cnt{display:inline-block;margin-left:6px;background:#2a3038;color:var(--text);border-radius:10px;padding:0 7px;font-size:12px}
+
+/* scan screen */
+#scan{background:#000;overflow:hidden}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#guide{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);aspect-ratio:63/88;height:min(68%,calc(84vw*88/63));border:2px dashed rgba(255,255,255,.6);border-radius:4.2% / 3%;pointer-events:none;transition:border-color .15s}
+#guide.lock{border-color:var(--good);border-style:solid}
+#guide i{position:absolute;left:5%;right:20%;top:4.3%;height:6.4%;border:1px solid rgba(255,255,255,.35);border-radius:4px}
+.topbar{position:absolute;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;padding:calc(8px + env(safe-area-inset-top,0px)) 10px 22px;background:linear-gradient(#000c,#0000)}
+.topbar .ttl{flex:1;min-width:0;font-weight:700;font-size:15px}
+.topbar .ttl small{font-weight:500;color:var(--dim);margin-left:4px}
+.chip{background:#0009;border:1px solid #fff3;color:#fff;border-radius:16px;padding:6px 11px;font-size:13px}
+.chip.on{background:var(--acc);color:var(--accText);border-color:var(--acc);font-weight:650}
+#status{position:absolute;left:50%;transform:translateX(-50%);top:calc(52px + env(safe-area-inset-top,0px));background:#000b;border-radius:14px;padding:5px 12px;font-size:13px;max-width:92%;text-align:center}
+#status:empty{display:none}
+#focusRing{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border:2px solid var(--warn);border-radius:50%;pointer-events:none;opacity:0;transition:opacity .5s}
+.camctl{position:absolute;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:26px 14px 14px;background:linear-gradient(#0000,#000c)}
+#shutter{width:70px;height:70px;border-radius:50%;border:4px solid #fff;background:#fff3;padding:0}
+#shutter:active{background:#fff8}
+#shutter.busy{border-color:var(--warn);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.5}}
+@media (prefers-reduced-motion:reduce){#shutter.busy{animation:none}}
+.camctl .l{justify-self:start}.camctl .r{justify-self:end;text-align:right;font-size:13px}
+#camErr{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;padding:24px;text-align:center;background:var(--bg)}
+#camErr p{max-width:32em;margin:0}
+
+/* sheets */
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:92%;overflow:auto;background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 -8px 30px #0008}
+.sheet h2{font-size:17px;margin:0 0 2px;line-height:1.25}
+.res{display:grid;grid-template-columns:112px 1fr;gap:12px;align-items:start}
+.res img{width:112px;border-radius:6px;background:var(--panel2);aspect-ratio:63/88;object-fit:cover;display:block}
+.res .meta{min-width:0;display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.step{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.step button{background:#2a3038;border:0;width:38px;height:38px;font-size:19px}
+.step span{min-width:34px;text-align:center}
+.alts{display:flex;gap:6px;overflow-x:auto;padding:2px 0 4px;margin-top:10px}
+.alts button{flex:none;white-space:nowrap}
+.sug{display:flex;flex-direction:column;margin-top:4px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.sug button{background:var(--panel2);border:0;border-bottom:1px solid var(--line);text-align:left;padding:10px}
+.sug button:last-child{border-bottom:0}
+.plist{display:flex;flex-direction:column;margin-top:10px}
+.prow{display:grid;grid-template-columns:28px 40px 1fr auto;gap:10px;align-items:center;padding:8px 4px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;width:100%}
+.prow.sel{background:#222a33}
+.prow .ico{width:24px;height:24px;filter:invert(1);opacity:.9}
+.prow .th{width:40px;border-radius:3px;aspect-ratio:63/88;object-fit:cover;background:var(--panel2)}
+.prow b{display:block;font-weight:600;overflow-wrap:anywhere}
+.prow small{color:var(--dim)}
+.tag{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:0 6px;font-size:11.5px;color:var(--dim);margin-right:4px}
+.tag.foil{color:#121417;border:0;background:linear-gradient(90deg,#f3c55b,#8fe3c0,#6fb3ff,#d79bff)}
+
+/* collection */
+#coll{overflow:auto;padding:12px max(12px,env(safe-area-inset-right,0px)) 20px max(12px,env(safe-area-inset-left,0px))}
+.wrap{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.head{display:flex;align-items:baseline;gap:10px;padding-top:env(safe-area-inset-top,0px)}
+.head h1{font-size:19px;margin:0;flex:1}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--dim)}
+.tools{display:grid;grid-template-columns:1fr auto;gap:8px}
+.tools input{grid-column:1/-1}
+@media (min-width:560px){.tools{grid-template-columns:1fr auto auto}.tools input{grid-column:auto}}
+.item{display:grid;grid-template-columns:52px 1fr;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)}
+.item img{width:52px;border-radius:4px;aspect-ratio:63/88;object-fit:cover;background:var(--panel2)}
+.item .m{min-width:0;display:flex;flex-direction:column;gap:5px}
+.item .t{display:flex;gap:8px;align-items:baseline}
+.item .t b{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600}
+.item .s{font-size:13px;color:var(--dim)}
+.item .step button{width:34px;height:34px}
+.empty{text-align:center;color:var(--dim);padding:34px 10px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.box h2{font-size:16px;margin:0}
+textarea{min-height:150px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+footer{color:var(--dim);font-size:12.5px;text-align:center;padding:8px 0 2px}
+footer a{color:var(--acc)}
+
+#toast{position:absolute;left:50%;transform:translateX(-50%);top:calc(92px + env(safe-area-inset-top,0px));z-index:20;background:#e6e8eb;color:#121417;border-radius:12px;padding:9px 10px 9px 14px;display:flex;gap:12px;align-items:center;max-width:92%;font-size:14px;box-shadow:0 6px 24px #000a}
+#toast button{background:#121417;color:#e6e8eb;border:0;border-radius:8px;padding:6px 12px;font-weight:650}
+</style>
+</head>
+<body>
+<main>
+  <section class="screen" id="scan">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <div id="guide"><i></i></div>
+    <div id="focusRing"></div>
+    <div class="topbar">
+      <div class="ttl">Seer’s Vision <small>v1.0.1</small></div>
+      <button class="chip" id="torchBtn" hidden>Light</button>
+      <button class="chip" id="flipBtn" hidden>Lens</button>
+      <button class="chip" id="autoBtn" title="Add the card as soon as it is recognized">Auto-add</button>
+    </div>
+    <div id="status" aria-live="polite">Starting camera</div>
+    <div class="camctl">
+      <label class="chip l" for="photoIn" style="cursor:pointer">Use a photo<input id="photoIn" type="file" accept="image/*" hidden></label>
+      <button id="shutter" aria-label="Scan now"></button>
+      <div class="r"><span id="sess" class="dim">Tap the ring to scan now</span></div>
+    </div>
+    <div id="camErr" hidden>
+      <h2 style="margin:0">Camera is not available</h2>
+      <p class="dim" id="camErrMsg"></p>
+      <div class="row" style="justify-content:center">
+        <button class="b" id="camRetry">Try again</button>
+        <label class="g" for="photoIn" style="cursor:pointer">Scan a photo instead</label>
+      </div>
+    </div>
+
+    <div class="sheet" id="sheet" hidden>
+      <div id="resFound">
+        <div class="res">
+          <img id="resImg" alt="">
+          <div class="meta">
+            <h2 id="resName"></h2>
+            <div id="resSet" class="dim"></div>
+            <div id="resHow" style="font-size:13px"></div>
+            <div class="row">
+              <span class="step"><button id="qMinus" aria-label="Fewer">&minus;</button><span id="qVal" class="num">1</span><button id="qPlus" aria-label="More">+</button></span>
+              <button class="g" id="foilBtn">Foil</button>
+              <span id="resPrice" class="num"></span>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="b" id="addBtn" style="flex:2 1 150px">Add to collection</button>
+          <button class="g" id="printBtn" style="flex:1 1 110px">Change printing</button>
+          <button class="g" id="skipBtn" style="flex:1 1 70px">Skip</button>
+        </div>
+      </div>
+      <div id="resNone" hidden>
+        <h2>Could not read this card</h2>
+        <div class="dim" id="resNoneMsg"></div>
+      </div>
+      <div class="alts" id="alts"></div>
+      <input id="nameSearch" type="search" placeholder="Wrong card? Type its name" autocomplete="off" style="margin-top:6px">
+      <div class="sug" id="sug" hidden></div>
+      <div class="row" id="noneBtns" style="margin-top:10px" hidden><button class="g" id="noneClose" style="flex:1">Back to camera</button></div>
+      <div id="printPanel" hidden>
+        <div class="row" style="margin-top:14px"><b style="flex:1" id="printTitle">Printings</b><button class="g" id="printClose">Close</button></div>
+        <div class="plist" id="plist"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="coll" hidden>
+    <div class="wrap">
+      <div class="head"><h1>Collection</h1><span class="dim" id="saveState"></span></div>
+      <div class="stats">
+        <div class="stat"><b id="stCards">0</b><span>cards</span></div>
+        <div class="stat"><b id="stUnique">0</b><span>different printings</span></div>
+        <div class="stat"><b id="stValue">$0.00</b><span>total value (USD)</span></div>
+      </div>
+      <div class="tools">
+        <input id="q" type="search" placeholder="Search by name" autocomplete="off">
+        <select id="sort" aria-label="Sort by">
+          <option value="added">Date added</option><option value="name">Name</option><option value="set">Set</option><option value="price">Price</option>
+        </select>
+        <button class="g" id="dir" aria-label="Sort direction">Newest</button>
+      </div>
+      <div id="list"></div>
+      <button class="g" id="more" hidden>Show more</button>
+
+      <div class="box">
+        <h2>Export</h2>
+        <div class="row">
+          <button class="g" id="expTxt">Text list</button>
+          <button class="g" id="expCsv">CSV</button>
+          <label class="row dim" style="gap:6px;font-size:13px"><input type="checkbox" id="expFoil" style="width:auto">Mark foils with *F* (leave off for Deck Clash)</label>
+        </div>
+        <div id="expOut" hidden style="display:flex;flex-direction:column;gap:8px">
+          <textarea id="expText" readonly spellcheck="false"></textarea>
+          <div class="row"><button class="b" id="expCopy">Copy</button><button class="g" id="expSave">Save as file</button><span class="dim" id="expMsg"></span></div>
+        </div>
+      </div>
+
+      <div class="box">
+        <h2>Import</h2>
+        <div class="dim" style="font-size:13px">Paste a text list (1 Sol Ring (C21) 263) or a CSV exported from this app, or choose a file.</div>
+        <textarea id="impText" spellcheck="false" placeholder="1 Sol Ring (C21) 263"></textarea>
+        <div class="row">
+          <label class="g" for="impFile" style="cursor:pointer">Choose file<input id="impFile" type="file" accept=".txt,.csv,text/plain,text/csv" hidden></label>
+          <button class="b" id="impAdd">Add to collection</button>
+          <button class="g" id="impReplace">Replace collection</button>
+        </div>
+        <div id="impMsg" class="dim" style="font-size:13px"></div>
+      </div>
+
+      <div class="box">
+        <h2>Upkeep</h2>
+        <div class="row">
+          <button class="g" id="refresh">Refresh prices</button>
+          <button class="g danger" id="clearAll">Clear collection</button>
+        </div>
+        <div id="upMsg" class="dim" style="font-size:13px">Prices are Scryfall's USD prices from when each card was added or last refreshed. The collection is saved in this browser on this device only.</div>
+      </div>
+      <footer>Seer’s Vision v1.0.1 &middot; made by MajorasPride &middot; card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Not affiliated with Wizards of the Coast.</footer>
+    </div>
+  </section>
+  <div id="toast" hidden><span id="toastMsg"></span><button id="toastUndo">Undo</button></div>
+</main>
+<nav>
+  <button id="tabScan" class="on">Scan</button>
+  <button id="tabColl">Collection<span class="cnt num" id="navCnt">0</span></button>
+</nav>
+
+<script>
+(function(){
+'use strict';
+var VERSION='1.0';
+var CDN={
+  cv:'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
+  tess:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+  tessWorker:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+  tessCore:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
+  tessLang:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int'
+};
+var API='https://api.scryfall.com';
+var $=function(id){return document.getElementById(id)};
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function money(n){return '$'+(Math.round(n*100)/100).toFixed(2)}
+
+// ------------------------------------------------------------ storage (this device only)
+// v1.0.1: a name counts as sure only when Scryfall's fuzzy lookup found it from the OCR text and the name bar OCR confidence is at least this (tune after real scans)
+var NAME_CONF=70;
+var K={coll:'mtgscan.collection.v1',hash:'mtgscan.hashes.v1',sets:'mtgscan.sets.v1',prefs:'mtgscan.prefs.v1'};
+function load(k,def){try{var v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+var coll=load(K.coll,[]); if(!Array.isArray(coll))coll=[];
+var hashCache=load(K.hash,{});
+var prefs=load(K.prefs,{auto:true,sort:'added',desc:true,cam:null,expFoil:false});
+var storageOK=true;
+function saveColl(){storageOK=save(K.coll,coll);$('saveState').textContent=storageOK?'Saved on this device':'Could not save: browser storage is blocked or full';$('saveState').className=storageOK?'dim':'bad';updateCounts()}
+function savePrefs(){save(K.prefs,prefs)}
+// v1.0.1: turn Auto-add on once for anyone coming from v1.0 (where it was off by default); the chip still turns it off
+if(!prefs.v101){prefs.auto=true;prefs.v101=1;savePrefs()}
+
+// ------------------------------------------------------------ Scryfall (queued, about 9 calls a second at most)
+var sfChain=Promise.resolve(),sfLast=0;
+function sf(path,opts){
+  var run=function(){
+    var wait=Math.max(0,110-(Date.now()-sfLast));
+    return sleep(wait).then(function(){sfLast=Date.now();return fetch(path.indexOf('http')===0?path:API+path,opts)})
+      .then(function(r){return r.json().catch(function(){return {}}).then(function(j){if(!r.ok){var e=new Error(j.details||('Scryfall error '+r.status));e.status=r.status;e.body=j;throw e}return j})});
+  };
+  var p=sfChain.then(run,run);sfChain=p.catch(function(){});return p;
+}
+function img(c,size){var u=c.image_uris||(c.card_faces&&c.card_faces[0]&&c.card_faces[0].image_uris)||{};return u[size]||''}
+function priceOf(usd,usdFoil,foil){var v=foil?(usdFoil||usd):(usd||usdFoil);return v?parseFloat(v):0}
+function cardPrice(c,foil){var p=c.prices||{};return priceOf(p.usd,p.usd_foil||p.usd_etched,foil)}
+var printsCache={};
+function getPrints(name){
+  if(printsCache[name])return printsCache[name];
+  var q='!"'+name.replace(/"/g,'')+'" game:paper';
+  var url='/cards/search?q='+encodeURIComponent(q)+'&unique=prints&order=released&dir=desc';
+  var all=[];
+  var step=function(u){return sf(u).then(function(j){all=all.concat(j.data||[]);return (j.has_more&&j.next_page&&all.length<1500)?step(j.next_page):all})};
+  var p=step(url).catch(function(e){delete printsCache[name];if(e.status===404)return [];throw e});
+  printsCache[name]=p;return p;
+}
+var setIcons=null;
+function getSetIcons(){
+  if(setIcons)return Promise.resolve(setIcons);
+  var c=load(K.sets,null);
+  if(c&&c.t&&Date.now()-c.t<14*864e5){setIcons=c.m;return Promise.resolve(setIcons)}
+  return sf('/sets').then(function(j){var m={};(j.data||[]).forEach(function(s){m[s.code]=s.icon_svg_uri});setIcons=m;save(K.sets,{t:Date.now(),m:m});return m}).catch(function(){return (c&&c.m)||{}});
+}
+
+// ------------------------------------------------------------ name lookup
+var SMALL={a:1,i:1};
+function cleanName(t){
+  t=String(t||'').replace(/[‘’`]/g,"'").replace(/[–—]/g,'-').replace(/\n/g,' ');
+  t=t.replace(/[^A-Za-zÀ-ɏ ,'\-]/g,' ').replace(/\s+/g,' ').trim();
+  var w=t.split(' ').filter(function(x){return /[A-Za-zÀ-ɏ]/.test(x)});
+  while(w.length&&w[w.length-1].replace(/[^A-Za-z]/g,'').length<2)w.pop();
+  while(w.length&&w[0].replace(/[^A-Za-z]/g,'').length<2&&!SMALL[w[0].toLowerCase()])w.shift();
+  t=w.join(' ').replace(/^[,'\- ]+|[,\- ]+$/g,'');
+  return t.replace(/[^A-Za-z]/g,'').length>=3?t:'';
+}
+function named(q,exact){return sf('/cards/named?'+(exact?'exact=':'fuzzy=')+encodeURIComponent(q))}
+function autocomplete(q){return sf('/cards/autocomplete?q='+encodeURIComponent(q)).then(function(j){return j.data||[]}).catch(function(){return []})}
+// returns {card, alts} or null
+function lookupName(text){
+  if(!text)return Promise.resolve(null);
+  var words=text.split(' ');
+  var viaAuto=function(q){return autocomplete(q).then(function(list){if(!list.length)return null;return named(list[0],true).then(function(c){return {card:c,alts:list.slice(1,6),via:'auto'}})})};
+  return named(text,false).then(function(c){return {card:c,alts:null,via:'fuzzy'}},function(e){
+    if(e.status!==404)throw e;
+    return viaAuto(text).then(function(r){
+      if(r||words.length<2)return r;
+      var shorter=words.slice(0,-1).join(' ');
+      return named(shorter,false).then(function(c){return {card:c,alts:null,via:'fuzzy'}},function(e2){if(e2.status!==404)throw e2;return viaAuto(words.slice(0,2).join(' '))});
+    });
+  });
+}
+
+// ------------------------------------------------------------ libraries (loaded in the background)
+function loadScript(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.async=true;s.crossOrigin='anonymous';s.onload=res;s.onerror=function(){rej(new Error('Could not load '+src))};document.head.appendChild(s)})}
+var cvReady=false,cv=null,ocrWorker=null,ocrFail=null;
+var cvPromise=loadScript(CDN.cv).then(function(){
+  var m=window.cv;
+  if(m&&m.Mat){return m}
+  if(m&&typeof m.then==='function'&&!(m instanceof Promise)){return new Promise(function(r){m.then(function(x){delete x.then;r(x)})})}
+  if(m instanceof Promise)return m;
+  return new Promise(function(r){m.onRuntimeInitialized=function(){r(m)}});
+}).then(function(m){cv=m;cvReady=true}).catch(function(e){console.warn(e);cvReady=false});
+var ocrPromise=loadScript(CDN.tess).then(function(){
+  return Tesseract.createWorker('eng',1,{workerPath:CDN.tessWorker,corePath:CDN.tessCore,langPath:CDN.tessLang});
+}).then(function(w){ocrWorker=w}).catch(function(e){console.warn(e);ocrFail=e});
+var ocrChain=Promise.resolve();
+function ocr(canvas,psm,whitelist){
+  var run=function(){return ocrPromise.then(function(){
+    if(!ocrWorker)throw new Error('The text reader could not load. Check the connection and reload.');
+    return ocrWorker.setParameters({tessedit_pageseg_mode:String(psm),tessedit_char_whitelist:whitelist||''}).then(function(){return ocrWorker.recognize(canvas)}).then(function(r){return {text:r.data.text||'',conf:r.data.confidence||0}});
+  })};
+  var p=ocrChain.then(run,run);ocrChain=p.catch(function(){});return p;
+}
+
+// ------------------------------------------------------------ image helpers
+function mk(w,h){var c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));return c}
+// crop a region given as fractions of the flat card, scale to a target height, grayscale, stretch contrast, dark text on light
+function prep(flat,fx,fy,fw,fh,targetH){
+  var sx=fx*flat.width,sy=fy*flat.height,sw=fw*flat.width,sh=fh*flat.height;
+  var s=targetH/sh,c=mk(sw*s,targetH),g=c.getContext('2d',{willReadFrequently:true});
+  g.imageSmoothingQuality='high';g.drawImage(flat,sx,sy,sw,sh,0,0,c.width,c.height);
+  var d=g.getImageData(0,0,c.width,c.height),p=d.data,n=p.length/4,hist=new Uint32Array(256),i,v,sum=0;
+  var gray=new Uint8Array(n);
+  for(i=0;i<n;i++){v=(p[i*4]*77+p[i*4+1]*150+p[i*4+2]*29)>>8;gray[i]=v;hist[v]++;sum+=v}
+  var lo=0,hi=255,acc=0;for(i=0;i<256;i++){acc+=hist[i];if(acc>=n*0.03){lo=i;break}}
+  acc=0;for(i=255;i>=0;i--){acc+=hist[i];if(acc>=n*0.03){hi=i;break}}
+  if(hi-lo<20){hi=Math.min(255,lo+20)}
+  var med=0;acc=0;for(i=0;i<256;i++){acc+=hist[i];if(acc>=n/2){med=i;break}}
+  var invert=med<(lo+hi)/2; // mostly dark strip means light text on dark
+  for(i=0;i<n;i++){v=(gray[i]-lo)*255/(hi-lo);v=v<0?0:v>255?255:v;if(invert)v=255-v;p[i*4]=p[i*4+1]=p[i*4+2]=v;p[i*4+3]=255}
+  g.putImageData(d,0,0);
+  // white margin helps the text reader
+  var o=mk(c.width+24,c.height+24),og=o.getContext('2d');og.fillStyle='#fff';og.fillRect(0,0,o.width,o.height);og.drawImage(c,12,12);
+  return o;
+}
+function rot180(c){var o=mk(c.width,c.height),g=o.getContext('2d');g.translate(c.width,c.height);g.rotate(Math.PI);g.drawImage(c,0,0);return o}
+// 64-bit difference hash on grayscale, as 16 hex characters
+function dhash(src,sx,sy,sw,sh){
+  var c=mk(72,64),g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingQuality='high';
+  g.drawImage(src,sx,sy,sw,sh,0,0,72,64);
+  var p=g.getImageData(0,0,72,64).data,cells=new Float32Array(72),x,y,i,j;
+  for(y=0;y<8;y++)for(x=0;x<9;x++){var s=0;for(j=0;j<8;j++)for(i=0;i<8;i++){var k=((y*8+j)*72+x*8+i)*4;s+=p[k]*0.299+p[k+1]*0.587+p[k+2]*0.114}cells[y*9+x]=s}
+  var hex='';
+  for(y=0;y<8;y++){var b=0;for(x=0;x<8;x++){b=(b<<1)|(cells[y*9+x]>cells[y*9+x+1]?1:0)}hex+=(b<16?'0':'')+b.toString(16)}
+  return hex;
+}
+var POP=new Uint8Array(256);(function(){for(var i=0;i<256;i++){var n=i,c=0;while(n){c+=n&1;n>>=1}POP[i]=c}})();
+function hamming(a,b){var d=0;for(var i=0;i<16;i+=2)d+=POP[parseInt(a.substr(i,2),16)^parseInt(b.substr(i,2),16)];return d}
+// art box of a normal frame, as fractions of the card; a few nudged crops make the match tolerant of a loose outline
+var ART={x:0.077,y:0.113,w:0.846,h:0.443};
+function scanArtHashes(flat){
+  var W=flat.width,H=flat.height,out=[],v=[[0,0,0],[0.012,0.012,-0.024],[-0.012,-0.012,0.024],[0,0.015,0],[0,-0.015,0]];
+  v.forEach(function(o){out.push(dhash(flat,(ART.x+o[0])*W,(ART.y+o[1])*H,(ART.w+o[2])*W,(ART.h+o[2]*0.5)*H))});
+  return out;
+}
+function loadImage(url){return new Promise(function(res,rej){var im=new Image();im.crossOrigin='anonymous';im.onload=function(){res(im)};im.onerror=function(){rej(new Error('image'))};im.src=url})}
+var hashDirty=false;
+function printHash(p){
+  if(hashCache[p.id])return Promise.resolve(hashCache[p.id]);
+  var u=img(p,'art_crop');if(!u)return Promise.resolve(null);
+  return loadImage(u).then(function(im){var h=dhash(im,0,0,im.naturalWidth,im.naturalHeight);hashCache[p.id]=h;hashDirty=true;return h}).catch(function(){return null});
+}
+function pool(items,n,fn){var i=0;var worker=function(){if(i>=items.length)return Promise.resolve();var it=items[i++];return fn(it).then(worker,worker)};var ws=[];for(var k=0;k<n;k++)ws.push(worker());return Promise.all(ws)}
+
+// ------------------------------------------------------------ card finding (OpenCV)
+var CARD_RATIO=63/88;
+function orderQuad(pts){
+  var cx=0,cy=0;pts.forEach(function(p){cx+=p.x/4;cy+=p.y/4});
+  pts=pts.slice().sort(function(a,b){return Math.atan2(a.y-cy,a.x-cx)-Math.atan2(b.y-cy,b.x-cx)}); // clockwise on screen
+  var best=0,bv=1e18;pts.forEach(function(p,i){var v=p.x+p.y;if(v<bv){bv=v;best=i}});
+  pts=pts.slice(best).concat(pts.slice(0,best)); // start at top-left
+  var d=function(a,b){return Math.hypot(a.x-b.x,a.y-b.y)};
+  var top=(d(pts[0],pts[1])+d(pts[2],pts[3]))/2,side=(d(pts[1],pts[2])+d(pts[3],pts[0]))/2;
+  if(top>side)pts=pts.slice(1).concat(pts.slice(0,1)); // card lies sideways: make the short edge the top
+  return {pts:pts,short:Math.min(top,side),long:Math.max(top,side)};
+}
+// The four-point outline cuts across the rounded corners. Fit a straight line to the middle of each side
+// and use the crossings as the true corners.
+function refineQuad(data,pts){
+  try{
+    var lines=[],n=data.length/2;
+    for(var s=0;s<4;s++){
+      var a=pts[s],b=pts[(s+1)%4],dx=b.x-a.x,dy=b.y-a.y,len2=dx*dx+dy*dy,len=Math.sqrt(len2),tol=Math.max(3,len*0.04);
+      var sx=0,sy=0,m=0,xs=[],ys=[];
+      for(var i=0;i<n;i++){var x=data[i*2],y=data[i*2+1],t=((x-a.x)*dx+(y-a.y)*dy)/len2;if(t<0.15||t>0.85)continue;
+        var d=Math.abs((x-a.x)*dy-(y-a.y)*dx)/len;if(d>tol)continue;xs.push(x);ys.push(y);sx+=x;sy+=y;m++}
+      if(m<6)return pts;
+      var mx=sx/m,my=sy/m,sxx=0,sxy=0,syy=0;for(i=0;i<m;i++){var ux=xs[i]-mx,uy=ys[i]-my;sxx+=ux*ux;sxy+=ux*uy;syy+=uy*uy}
+      var th=0.5*Math.atan2(2*sxy,sxx-syy);lines.push({x:mx,y:my,dx:Math.cos(th),dy:Math.sin(th)});
+    }
+    var out=[];
+    for(s=0;s<4;s++){var l1=lines[(s+3)%4],l2=lines[s],den=l1.dx*l2.dy-l1.dy*l2.dx;if(Math.abs(den)<1e-6)return pts;
+      var k=((l2.x-l1.x)*l2.dy-(l2.y-l1.y)*l2.dx)/den,X=l1.x+k*l1.dx,Y=l1.y+k*l1.dy;
+      if(Math.hypot(X-pts[s].x,Y-pts[s].y)>0.2*Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y)+20)return pts;out.push({x:X,y:Y})}
+    return out;
+  }catch(e){return pts}
+}
+function findCard(canvas){
+  if(!cvReady)return null;
+  var W=canvas.width,H=canvas.height,src=null,gray=null,edges=null,kern=null,contours=null,hier=null,best=null,bestArea=0;
+  try{
+    src=cv.imread(canvas);gray=new cv.Mat();edges=new cv.Mat();
+    cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);cv.GaussianBlur(gray,gray,new cv.Size(5,5),0);
+    cv.Canny(gray,edges,40,120);
+    kern=cv.getStructuringElement(cv.MORPH_RECT,new cv.Size(3,3));cv.dilate(edges,edges,kern);
+    contours=new cv.MatVector();hier=new cv.Mat();
+    cv.findContours(edges,contours,hier,cv.RETR_LIST,cv.CHAIN_APPROX_SIMPLE);
+    var minA=0.05*W*H,maxA=0.97*W*H;
+    for(var i=0;i<contours.size();i++){
+      var c=contours.get(i),area=cv.contourArea(c);
+      if(area>minA&&area<maxA&&area>bestArea){
+        var pts=null,approx=new cv.Mat();
+        cv.approxPolyDP(c,approx,0.02*cv.arcLength(c,true),true);
+        if(approx.rows===4&&cv.isContourConvex(approx)){pts=[];for(var k=0;k<4;k++)pts.push({x:approx.data32S[k*2],y:approx.data32S[k*2+1]});pts=refineQuad(c.data32S,pts)}
+        else{var rr=cv.minAreaRect(c);if(area/(rr.size.width*rr.size.height)>0.86){pts=cv.RotatedRect.points(rr).map(function(p){return {x:p.x,y:p.y}})}}
+        approx.delete();
+        if(pts){var q=orderQuad(pts),r=q.short/q.long;if(r>0.6&&r<0.83){best=q.pts;bestArea=area}}
+      }
+      c.delete();
+    }
+  }catch(e){console.warn('findCard',e)}
+  [src,gray,edges,kern,contours,hier].forEach(function(m){if(m)try{m.delete()}catch(e){}});
+  return best;
+}
+// flatten the card: quad points are in frame pixels; output is an upright card about 630 x 880 (larger when the camera allows)
+function warpCard(frame,quad){
+  var xs=quad.map(function(p){return p.x}),ys=quad.map(function(p){return p.y});
+  var x0=Math.max(0,Math.floor(Math.min.apply(null,xs))-4),y0=Math.max(0,Math.floor(Math.min.apply(null,ys))-4);
+  var x1=Math.min(frame.width,Math.ceil(Math.max.apply(null,xs))+4),y1=Math.min(frame.height,Math.ceil(Math.max.apply(null,ys))+4);
+  var crop=mk(x1-x0,y1-y0);crop.getContext('2d').drawImage(frame,x0,y0,x1-x0,y1-y0,0,0,x1-x0,y1-y0);
+  var shortEdge=Math.hypot(quad[0].x-quad[1].x,quad[0].y-quad[1].y);
+  var S=Math.max(1,Math.min(2,shortEdge/630)),FW=Math.round(630*S),FH=Math.round(880*S);
+  var src=cv.imread(crop),dst=new cv.Mat();
+  var a=[];quad.forEach(function(p){a.push(p.x-x0,p.y-y0)});
+  var m1=cv.matFromArray(4,1,cv.CV_32FC2,a),m2=cv.matFromArray(4,1,cv.CV_32FC2,[0,0,FW,0,FW,FH,0,FH]);
+  var M=cv.getPerspectiveTransform(m1,m2);
+  cv.warpPerspective(src,dst,M,new cv.Size(FW,FH),cv.INTER_LINEAR,cv.BORDER_REPLICATE);
+  var out=mk(FW,FH);cv.imshow(out,dst);
+  [src,dst,m1,m2,M].forEach(function(m){m.delete()});
+  return out;
+}
+function cropRect(frame,r){
+  var S=Math.max(1,Math.min(2,r.w/630)),out=mk(630*S,880*S);
+  var g=out.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(frame,r.x,r.y,r.w,r.h,0,0,out.width,out.height);return out;
+}
+
+// ------------------------------------------------------------ reading a flat card
+var TITLE={x:0.055,y:0.04,w:0.74,h:0.068};      // name bar, left of the mana cost
+var INFO={x:0.03,y:0.925,w:0.42,h:0.062};       // collector number and set code, bottom left
+function readName(flat,loose){
+  // loose: a taller band, for when the outline was a little off
+  return ocr(loose?prep(flat,TITLE.x,TITLE.y-0.022,TITLE.w,TITLE.h+0.044,96):prep(flat,TITLE.x,TITLE.y,TITLE.w,TITLE.h,72),7).then(function(r){return {text:cleanName(r.text),conf:r.conf}});
+}
+function readInfo(flat){
+  return ocr(prep(flat,INFO.x,INFO.y,INFO.w,INFO.h,150),6,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/ ').then(function(r){
+    var toks=r.text.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean),sets={},nums={};
+    toks.forEach(function(t){if(/^[A-Z0-9]{3,5}$/.test(t)&&/[A-Z]/.test(t))sets[t]=1;var m=t.match(/^[A-Z]?0*(\d{1,4})[A-Z]?$/);if(m)nums[m[1]]=1});
+    r.text.replace(/(\d{1,4})\s*\/\s*\d{2,4}/g,function(_,a){nums[String(parseInt(a,10))]=1});
+    return {sets:sets,nums:nums};
+  }).catch(function(){return {sets:{},nums:{}}});
+}
+function normCn(s){var m=String(s).match(/\d+/);return m?String(parseInt(m[0],10)):''}
+// pick the printing: set code and collector number first, then artwork
+function matchPrinting(prints,flat){
+  if(prints.length<=1)return Promise.resolve({pick:prints[0]||null,how:prints.length?'Only one printing exists':'',sure:prints.length===1});
+  var infoP=flat?readInfo(flat):Promise.resolve({sets:{},nums:{}});
+  return infoP.then(function(info){
+    var bySet=prints.filter(function(p){return info.sets[p.set.toUpperCase()]});
+    var base=bySet.length?bySet:prints;
+    var byNum=base.filter(function(p){return info.nums[normCn(p.collector_number)]});
+    if(bySet.length&&byNum.length===1)return {pick:byNum[0],how:'Printing matched by set code and number',sure:true};
+    if(bySet.length===1)return {pick:bySet[0],how:'Printing matched by set code',sure:true};
+    var cands=byNum.length?byNum:base,narrowed=cands.length<prints.length;
+    if(cands.length===1)return {pick:cands[0],how:'Printing matched by collector number',sure:true};
+    if(!flat)return {pick:prints[0],how:'Newest printing shown. Check the printing.'};
+    var capped=cands.length>60;cands=cands.slice(0,60);
+    var mine=scanArtHashes(flat);
+    return pool(cands,6,function(p){return printHash(p).then(function(h){p._h=h})}).then(function(){
+      if(hashDirty){hashDirty=false;save(K.hash,hashCache)}
+      var best=null,bd=99;
+      cands.forEach(function(p){if(!p._h)return;var d=64;mine.forEach(function(h){d=Math.min(d,hamming(h,p._h))});if(d<bd){bd=d;best=p}});
+      if(!best)return {pick:cands[0],how:'Could not compare artwork. Check the printing.'};
+      var same=cands.filter(function(p){return p._h&&hamming(p._h,best._h)<=3}).length;
+      var how=bd<=18?(same>1?'Artwork matched, but '+same+' printings share this art. Check the printing.':'Printing matched by artwork'):'Artwork match is weak. Check the printing.';
+      if(capped)how+=' Compared the 60 newest of '+prints.length+'.';
+      return {pick:best,how:how,sure:bd<=18&&same===1,narrowed:narrowed};
+    });
+  });
+}
+
+// ------------------------------------------------------------ camera
+var video=$('video'),overlay=$('overlay'),guide=$('guide'),statusEl=$('status');
+var stream=null,track=null,camList=[],scanTimer=null,busy=false,sheetOpen=false,needClear=false,lastQuad=null,stable=0,curQuad=null,torchOn=false;
+var det=mk(2,2);
+function setStatus(t){statusEl.textContent=t}
+function stopCamera(){if(scanTimer){clearInterval(scanTimer);scanTimer=null}if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null;track=null}releaseWake()}
+function startCamera(){
+  if(stream||!$('coll').hidden)return Promise.resolve();
+  $('camErr').hidden=true;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){camError('This browser does not give web pages a camera. Open the page in Chrome over https, or scan a photo.');return Promise.resolve()}
+  var v={width:{ideal:3840},height:{ideal:2160}};
+  if(prefs.cam)v.deviceId={exact:prefs.cam};else v.facingMode={ideal:'environment'};
+  setStatus('Starting camera');
+  return navigator.mediaDevices.getUserMedia({video:v,audio:false}).catch(function(e){
+    if(prefs.cam){prefs.cam=null;savePrefs();return navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}},audio:false})}
+    throw e;
+  }).then(function(s){
+    stream=s;track=s.getVideoTracks()[0];video.srcObject=s;
+    return video.play().catch(function(){}).then(function(){
+      var caps=track.getCapabilities?track.getCapabilities():{};
+      if(caps.focusMode&&caps.focusMode.indexOf('continuous')>=0)track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(function(){});
+      $('torchBtn').hidden=!caps.torch;torchOn=false;$('torchBtn').classList.remove('on');
+      navigator.mediaDevices.enumerateDevices().then(function(d){
+        camList=d.filter(function(x){return x.kind==='videoinput'});
+        var back=camList.filter(function(x){return /back|rear|environment/i.test(x.label)});if(back.length>1)camList=back;
+        $('flipBtn').hidden=camList.length<2;
+      }).catch(function(){});
+      requestWake();
+      if(!scanTimer)scanTimer=setInterval(tick,260);
+      setStatus(cvReady?'Hold a card inside the frame':'Loading the card finder. Tap the ring to scan from the frame.');
+    });
+  }).catch(function(e){
+    var m=e&&e.name==='NotAllowedError'?'Camera permission was refused. Allow the camera for this site in the browser settings, then try again.':(e&&e.name==='NotFoundError'?'No camera was found on this device.':'The camera could not start ('+(e&&e.message||e)+').');
+    camError(m+' You can still scan a photo.');
+  });
+}
+function camError(m){$('camErrMsg').textContent=m;$('camErr').hidden=false;setStatus('')}
+var wake=null;
+function requestWake(){try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(w){wake=w}).catch(function(){})}catch(e){}}
+function releaseWake(){try{if(wake){wake.release();wake=null}}catch(e){}}
+// video pixel <-> element pixel mapping for object-fit: cover
+function vmap(){
+  var ew=video.clientWidth,eh=video.clientHeight,vw=video.videoWidth,vh=video.videoHeight;
+  var s=Math.max(ew/vw,eh/vh);return {s:s,ox:(ew-vw*s)/2,oy:(eh-vh*s)/2};
+}
+function guideRectVideo(){
+  var m=vmap(),g=guide.getBoundingClientRect(),v=video.getBoundingClientRect();
+  var r={x:(g.left-v.left-m.ox)/m.s,y:(g.top-v.top-m.oy)/m.s,w:g.width/m.s,h:g.height/m.s};
+  r.x=Math.max(0,r.x);r.y=Math.max(0,r.y);r.w=Math.min(video.videoWidth-r.x,r.w);r.h=Math.min(video.videoHeight-r.y,r.h);return r;
+}
+function drawQuad(q,locked){
+  var dpr=window.devicePixelRatio||1,w=overlay.clientWidth,h=overlay.clientHeight;
+  if(overlay.width!==Math.round(w*dpr)){overlay.width=Math.round(w*dpr);overlay.height=Math.round(h*dpr)}
+  var g=overlay.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  guide.classList.toggle('lock',!!locked);
+  if(!q)return;var m=vmap();
+  g.beginPath();q.forEach(function(p,i){var x=p.x*m.s+m.ox,y=p.y*m.s+m.oy;if(i)g.lineTo(x,y);else g.moveTo(x,y)});g.closePath();
+  g.lineWidth=locked?4:2;g.strokeStyle=locked?'#5ccf8a':'rgba(255,255,255,.8)';g.stroke();
+  if(locked){g.fillStyle='rgba(92,207,138,.14)';g.fill()}
+}
+function tick(){
+  if(busy||sheetOpen||!stream||!video.videoWidth||document.hidden)return;
+  if(!cvReady){return}
+  var vw=video.videoWidth,vh=video.videoHeight,sc=Math.min(1,640/Math.max(vw,vh));
+  det.width=Math.round(vw*sc);det.height=Math.round(vh*sc);
+  det.getContext('2d',{willReadFrequently:true}).drawImage(video,0,0,det.width,det.height);
+  var q=findCard(det);
+  if(!q){lastQuad=null;stable=0;curQuad=null;needClear=false;drawQuad(null);setStatus('Hold a card inside the frame');return}
+  q=q.map(function(p){return {x:p.x/sc,y:p.y/sc}});
+  var moved=1e9;if(lastQuad){moved=0;for(var i=0;i<4;i++)moved=Math.max(moved,Math.hypot(q[i].x-lastQuad[i].x,q[i].y-lastQuad[i].y))}
+  stable=moved<0.02*Math.hypot(vw,vh)?stable+1:0;lastQuad=q;curQuad=q;
+  var locked=stable>=2;drawQuad(q,locked);
+  if(needClear){setStatus('Added. Show the next card.');return}
+  setStatus(locked?'Card locked':'Hold steady');
+  if(locked)capture(true);
+}
+function grabFrame(){var c=mk(video.videoWidth,video.videoHeight);c.getContext('2d').drawImage(video,0,0);return c}
+function capture(auto){
+  if(busy||!stream||!video.videoWidth)return;
+  var frame=grabFrame(),quad=(cvReady&&curQuad&&stable>=1)?curQuad:null;
+  identify(frame,quad,guideRectVideo());
+}
+
+// ------------------------------------------------------------ identify: frame -> flat card -> name -> printing
+var job=0,cur=null;
+function identify(frame,quad,rect){
+  busy=true;var my=++job;$('shutter').classList.add('busy');setStatus(ocrWorker?'Reading the name':'Loading the text reader (first time takes a moment)');
+  var flats=[];
+  try{if(quad)flats.push(warpCard(frame,quad))}catch(e){console.warn(e)}
+  if(rect)flats.push(cropRect(frame,rect));
+  var tried=[];
+  // try each flat card upright, then upside down, until Scryfall knows the name
+  var plan=[];flats.forEach(function(f,k){plan.push([k,false,false],[k,true,false])});flats.forEach(function(f,k){plan.push([k,false,true])});
+  var attempt=function(i){
+    if(i>=plan.length)return Promise.resolve(null);
+    var flat=flats[plan[i][0]];if(plan[i][1])flat=rot180(flat);
+    return readName(flat,plan[i][2]).then(function(r){
+      if(!r.text||tried.indexOf(r.text)>=0||(r.conf<35&&r.text.length<5)){if(r.text&&tried.indexOf(r.text)<0)tried.push(r.text);return attempt(i+1)}
+      tried.push(r.text);
+      return lookupName(r.text).then(function(hit){if(hit){hit.flat=flat;hit.read=r.text;hit.conf=r.conf;return hit}return attempt(i+1)});
+    });
+  };
+  return attempt(0).then(function(hit){
+    if(my!==job)return;
+    if(!hit){showNone(tried);return}
+    showCard(hit.card,{flat:hit.flat,alts:hit.alts,read:hit.read,nameSure:hit.via==='fuzzy'&&hit.conf>=NAME_CONF});
+  }).catch(function(e){
+    if(my!==job)return;console.warn(e);
+    showNone(tried,(e&&e.message)||'Something went wrong.');
+  }).then(function(){busy=false;$('shutter').classList.remove('busy')});
+}
+function openSheet(){setStatus('');sheetOpen=true;$('sheet').hidden=false;drawQuad(null);$('printPanel').hidden=true;$('sug').hidden=true;$('nameSearch').value=''}
+function closeSheet(){sheetOpen=false;$('sheet').hidden=true;cur=null;job++;stable=0;lastQuad=null;if(stream)setStatus('Hold a card inside the frame')}
+function showNone(tried,err){
+  openSheet();$('resFound').hidden=true;$('resNone').hidden=false;$('noneBtns').hidden=false;$('alts').textContent='';
+  var best=tried.filter(Boolean)[0]||'';
+  $('resNoneMsg').textContent=err?err:(best?'Read "'+best+'" but found no card with that name. Try again with more light, or type the name below.':'No name could be read. Fill the frame with the card, avoid glare, or type the name below.');
+  if(best){$('nameSearch').value=best;suggest()}
+}
+function showCard(card,o){
+  o=o||{};openSheet();$('resFound').hidden=false;$('resNone').hidden=true;$('noneBtns').hidden=true;
+  var fin=card.finishes||['nonfoil'];
+  cur={card:card,prints:null,flat:o.flat||null,qty:1,foil:fin.indexOf('nonfoil')<0,how:'Finding the printing',pending:true,token:++job,nameSure:!!o.nameSure,printErr:false};
+  renderCur();renderAlts(o.alts,o.read,card.name);
+  var c=cur;
+  getPrints(card.name).then(function(prints){
+    if(cur!==c)return;c.prints=prints;
+    return matchPrinting(prints,c.flat).then(function(m){
+      if(cur!==c)return;
+      if(m.pick){c.card=m.pick;var f=m.pick.finishes||['nonfoil'];if(f.indexOf('nonfoil')<0)c.foil=true;else if(f.length===1)c.foil=false}
+      c.how=m.how;c.sure=m.sure;
+    });
+  }).catch(function(e){if(cur===c){c.printErr=true;c.sure=false;c.how='Could not load printings ('+(e.message||'network')+'). Using the first match.'}})
+  .then(function(){if(cur!==c)return;c.pending=false;
+    var very=c.nameSure&&c.sure===true&&!c.printErr&&!!o.flat;c.very=very;
+    if(!very)c.how=c.printErr?'Printings did not load. Using the first match.':(!c.nameSure?'Not sure of the name. ':'Check the printing. ')+c.how.replace(/ ?Check the printing\.?/,'');
+    renderCur();if(!$('printPanel').hidden)renderPrints();if(prefs.auto&&very)addCurrent()});
+  if(!o.alts&&o.read)autocomplete(o.read).then(function(list){if(cur===c)renderAlts(list.filter(function(n){return n!==card.name}).slice(0,5),o.read,card.name)});
+}
+function renderCur(){
+  var c=cur.card,fin=c.finishes||['nonfoil'];
+  $('resImg').src=img(c,'normal')||img(c,'small');$('resImg').alt=c.name;
+  $('resName').textContent=c.name;
+  $('resSet').textContent=c.set_name+' ('+c.set.toUpperCase()+') #'+c.collector_number;
+  $('resHow').textContent=cur.how;$('resHow').className=cur.pending?'dim':(cur.sure&&cur.very!==false?'good':'warn');
+  $('qVal').textContent=cur.qty;
+  $('foilBtn').classList.toggle('on',cur.foil);$('foilBtn').disabled=fin.length===1&&(fin[0]==='nonfoil'||fin.indexOf('nonfoil')<0);
+  var p=cardPrice(c,cur.foil);$('resPrice').textContent=p?money(p):'No price';
+}
+function renderAlts(list,read,chosen){
+  var box=$('alts');box.textContent='';
+  (list||[]).slice(0,5).forEach(function(n){if(n===chosen)return;var b=el('button','g',n);b.onclick=function(){pickName(n)};box.appendChild(b)});
+}
+function pickName(n){
+  var flat=cur&&cur.flat;$('sug').hidden=true;
+  named(n,true).then(function(c){showCard(c,{flat:flat,read:null,alts:[]})}).catch(function(e){toast('Could not load that card: '+e.message)});
+}
+var sugT=null;
+function suggest(){
+  var q=$('nameSearch').value.trim(),box=$('sug');
+  if(q.length<2){box.hidden=true;return}
+  clearTimeout(sugT);sugT=setTimeout(function(){
+    autocomplete(q).then(function(list){
+      if($('nameSearch').value.trim()!==q)return;box.textContent='';
+      list.slice(0,8).forEach(function(n){var b=el('button',null,n);b.onclick=function(){pickName(n)};box.appendChild(b)});
+      if(!list.length)box.appendChild(el('button',null,'No card names match'));
+      box.hidden=false;
+    });
+  },260);
+}
+function renderPrints(){
+  var box=$('plist');box.textContent='';
+  if(!cur||!cur.prints){box.appendChild(el('div','dim','Loading printings'));return}
+  $('printTitle').textContent=cur.prints.length+' printing'+(cur.prints.length===1?'':'s')+' of '+cur.card.name;
+  getSetIcons().then(function(icons){
+    if(!cur||!cur.prints)return;box.textContent='';
+    cur.prints.slice(0,400).forEach(function(p){
+      var r=el('button','prow'+(p.id===cur.card.id?' sel':''));
+      var ic=el('img','ico');ic.alt='';ic.loading='lazy';if(icons[p.set])ic.src=icons[p.set];else ic.style.visibility='hidden';
+      var th=el('img','th');th.alt='';th.loading='lazy';th.src=img(p,'small');
+      var mid=el('span');var b=el('b',null,p.set_name);mid.appendChild(b);
+      var sub=el('small',null,p.set.toUpperCase()+' #'+p.collector_number+' · '+String(p.released_at||'').slice(0,4)+' ');
+      var extra=[];if(p.border_color==='borderless')extra.push('borderless');(p.frame_effects||[]).forEach(function(f){if(/showcase|extendedart|etched/.test(f))extra.push(f.replace('extendedart','extended art'))});if(p.full_art)extra.push('full art');if(p.promo)extra.push('promo');
+      mid.appendChild(sub);extra.forEach(function(t){mid.appendChild(el('span','tag',t))});
+      var pr=cardPrice(p,false)||cardPrice(p,true);var price=el('span','num',pr?money(pr):'');
+      r.appendChild(ic);r.appendChild(th);r.appendChild(mid);r.appendChild(price);
+      r.onclick=function(){cur.card=p;cur.how='Printing chosen by you';cur.sure=true;cur.pending=false;var f=p.finishes||['nonfoil'];if(f.indexOf('nonfoil')<0)cur.foil=true;else if(f.indexOf('foil')<0&&f.indexOf('etched')<0)cur.foil=false;renderCur();$('printPanel').hidden=true;$('sheet').scrollTop=0};
+      box.appendChild(r);
+    });
+  });
+}
+
+// ------------------------------------------------------------ collection
+function entryFrom(c,foil,qty){var p=c.prices||{};return {id:c.id,name:c.name,set:c.set,setName:c.set_name,cn:c.collector_number,qty:qty,foil:!!foil,img:img(c,'normal'),thumb:img(c,'small'),usd:p.usd||null,usdFoil:p.usd_foil||p.usd_etched||null,added:Date.now()}}
+function ePrice(e){return priceOf(e.usd,e.usdFoil,e.foil)}
+function addEntry(e){
+  var ex=coll.filter(function(x){return x.id===e.id&&x.foil===e.foil})[0];
+  if(ex){ex.qty+=e.qty;ex.added=Date.now();ex.usd=e.usd||ex.usd;ex.usdFoil=e.usdFoil||ex.usdFoil}else coll.push(e);
+  return ex||e;
+}
+var sessionAdded=0;
+function addCurrent(){
+  if(!cur)return;var before=JSON.stringify(coll),e=entryFrom(cur.card,cur.foil,cur.qty),n=cur.qty;
+  var t=addEntry(e);saveColl();sessionAdded+=n;
+  $('sess').textContent=sessionAdded+' added this session';$('sess').className='';
+  try{if(navigator.vibrate)navigator.vibrate(40)}catch(x){}
+  closeSheet();needClear=true;
+  toast('Added '+(n>1?n+' x ':'')+e.name+' ('+e.set.toUpperCase()+')'+(t.qty>n?', now '+t.qty:''),function(){coll=JSON.parse(before);sessionAdded-=n;$('sess').textContent=sessionAdded+' added this session';saveColl();renderColl()});
+}
+function updateCounts(){var n=0;coll.forEach(function(e){n+=e.qty});$('navCnt').textContent=n}
+var shown=200;
+function renderColl(){
+  var q=$('q').value.trim().toLowerCase(),total=0,cards=0;
+  coll.forEach(function(e){cards+=e.qty;total+=ePrice(e)*e.qty});
+  $('stCards').textContent=cards;$('stUnique').textContent=coll.length;$('stValue').textContent=money(total);
+  var list=coll.filter(function(e){return !q||e.name.toLowerCase().indexOf(q)>=0});
+  var s=prefs.sort,cmp={
+    name:function(a,b){return a.name.localeCompare(b.name)},
+    set:function(a,b){return a.set.localeCompare(b.set)||(parseInt(a.cn,10)||0)-(parseInt(b.cn,10)||0)||a.cn.localeCompare(b.cn)},
+    price:function(a,b){return ePrice(a)-ePrice(b)},
+    added:function(a,b){return a.added-b.added}
+  }[s];
+  list.sort(function(a,b){var r=cmp(a,b)||a.name.localeCompare(b.name);return prefs.desc?-r:r});
+  $('dir').textContent=s==='added'?(prefs.desc?'Newest':'Oldest'):s==='price'?(prefs.desc?'High to low':'Low to high'):(prefs.desc?'Z to A':'A to Z');
+  var box=$('list');box.textContent='';
+  if(!list.length){box.appendChild(el('div','empty',coll.length?'No cards match "'+$('q').value+'".':'No cards yet. Open Scan, point the camera at a card, and tap Add to collection.'))}
+  list.slice(0,shown).forEach(function(e){
+    var it=el('div','item');var im=el('img');im.loading='lazy';im.alt='';im.src=e.thumb||e.img||'';it.appendChild(im);
+    var m=el('div','m');var t=el('div','t');t.appendChild(el('b',null,e.name));var p=ePrice(e);t.appendChild(el('span','num',p?money(p)+(e.qty>1?' each':''):'No price'));m.appendChild(t);
+    var sline=el('div','s');if(e.foil)sline.appendChild(el('span','tag foil','Foil'));sline.appendChild(document.createTextNode(e.setName+' ('+e.set.toUpperCase()+') #'+e.cn));m.appendChild(sline);
+    var row=el('div','row');var st=el('span','step');
+    var minus=el('button',null,'−');minus.setAttribute('aria-label','One fewer '+e.name);var val=el('span','num',e.qty);var plus=el('button',null,'+');plus.setAttribute('aria-label','One more '+e.name);
+    minus.onclick=function(){if(e.qty<=1){removeEntry(e);return}e.qty--;saveColl();renderColl()};
+    plus.onclick=function(){e.qty++;saveColl();renderColl()};
+    st.appendChild(minus);st.appendChild(val);st.appendChild(plus);row.appendChild(st);
+    var fb=el('button','g'+(e.foil?' on':''),'Foil');fb.onclick=function(){
+      var other=coll.filter(function(x){return x!==e&&x.id===e.id&&x.foil===!e.foil})[0];
+      if(other){other.qty+=e.qty;coll.splice(coll.indexOf(e),1)}else e.foil=!e.foil;saveColl();renderColl()};
+    row.appendChild(fb);
+    var rm=el('button','g danger','Remove');rm.onclick=function(){removeEntry(e)};row.appendChild(rm);
+    m.appendChild(row);it.appendChild(m);box.appendChild(it);
+  });
+  $('more').hidden=list.length<=shown;$('more').textContent='Show more ('+(list.length-shown)+' left)';
+}
+function removeEntry(e){var i=coll.indexOf(e);if(i<0)return;coll.splice(i,1);saveColl();renderColl();toast('Removed '+e.name,function(){coll.splice(Math.min(i,coll.length),0,e);saveColl();renderColl()})}
+
+// ------------------------------------------------------------ export / import
+function csvCell(v){v=v==null?'':String(v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+var CSV_HEAD=['Quantity','Name','Set code','Set name','Collector number','Foil','Scryfall ID','Image','Price USD','Date added'];
+function exportText(){return coll.slice().sort(function(a,b){return a.name.localeCompare(b.name)}).map(function(e){return e.qty+' '+e.name+' ('+e.set.toUpperCase()+') '+e.cn+(prefs.expFoil&&e.foil?' *F*':'')}).join('\n')}
+function exportCsv(){return [CSV_HEAD.join(',')].concat(coll.map(function(e){var p=ePrice(e);return [e.qty,e.name,e.set.toUpperCase(),e.setName,e.cn,e.foil?'yes':'no',e.id,e.img,p?p.toFixed(2):'',new Date(e.added).toISOString()].map(csvCell).join(',')})).join('\n')}
+function parseCsv(t){
+  var rows=[],row=[],cell='',q=false,i,ch;
+  for(i=0;i<t.length;i++){ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){cell+='"';i++}else q=false}else cell+=ch}
+    else if(ch==='"')q=true;else if(ch===','){row.push(cell);cell=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;row.push(cell);cell='';if(row.length>1||row[0]!=='')rows.push(row);row=[]}
+    else cell+=ch}
+  row.push(cell);if(row.length>1||row[0]!=='')rows.push(row);return rows;
+}
+function collectionLookup(ids){ // Scryfall /cards/collection, 75 at a time; returns cards aligned with ids (null when not found)
+  var out=new Array(ids.length),chunks=[];for(var i=0;i<ids.length;i+=75)chunks.push([i,ids.slice(i,i+75)]);
+  var go=function(k){
+    if(k>=chunks.length)return Promise.resolve(out);
+    var off=chunks[k][0],part=chunks[k][1];
+    return sf('/cards/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifiers:part})}).then(function(j){
+      var miss={};(j.not_found||[]).forEach(function(n){miss[JSON.stringify(n)]=(miss[JSON.stringify(n)]||0)+1});
+      var d=j.data||[],di=0;
+      part.forEach(function(id,n){var key=JSON.stringify(id);if(miss[key]){miss[key]--;out[off+n]=null}else out[off+n]=d[di++]||null});
+      return go(k+1);
+    });
+  };
+  return go(0);
+}
+function parseImport(text){
+  text=text.replace(/^﻿/,'');
+  var first=(text.split(/\r?\n/)[0]||'').toLowerCase();
+  if(first.indexOf(',')>=0&&/quantity|name|scryfall/.test(first)){
+    var rows=parseCsv(text),head=rows.shift().map(function(h){return h.trim().toLowerCase()});
+    var col=function(){for(var i=0;i<arguments.length;i++){var k=head.indexOf(arguments[i]);if(k>=0)return k}return -1};
+    var cQ=col('quantity','qty','count'),cN=col('name','card name'),cS=col('set code','set','edition'),cSN=col('set name'),cC=col('collector number','number'),cF=col('foil','finish'),cI=col('scryfall id','scryfall_id','id'),cIm=col('image'),cP=col('price usd','price'),cD=col('date added');
+    return {kind:'csv',items:rows.map(function(r){var g=function(c){return c>=0&&r[c]!=null?String(r[c]).trim():''};var d=Date.parse(g(cD));
+      return {qty:Math.max(1,parseInt(g(cQ),10)||1),name:g(cN),set:g(cS).toLowerCase(),setName:g(cSN),cn:g(cC),foil:/^(yes|true|1|foil|etched)$/i.test(g(cF)),id:g(cI),img:g(cIm),price:g(cP),added:isNaN(d)?Date.now():d}}).filter(function(x){return x.name||x.id})};
+  }
+  var items=[],bad=[];
+  text.split(/\r?\n/).forEach(function(line){
+    line=line.trim();if(!line||/^(sideboard|sb|deck|commander|maybeboard)\s*:?$/i.test(line))return;
+    var foil=/\s\*F\*$/i.test(line);line=line.replace(/\s\*F\*$/i,'');
+    var m=line.match(/^(\d+)\s*x?\s+(.+?)(?:\s+\(([A-Za-z0-9]+)\)(?:\s+(\S+))?)?$/);
+    if(!m){m=[null,'1',line,null,null];if(/^\d/.test(line)){bad.push(line);return}}
+    items.push({qty:Math.max(1,parseInt(m[1],10)||1),name:m[2].trim(),set:(m[3]||'').toLowerCase(),cn:m[4]||'',foil:foil});
+  });
+  return {kind:'text',items:items,bad:bad};
+}
+function runImport(replace){
+  var text=$('impText').value,msg=$('impMsg');if(!text.trim()){msg.textContent='Paste a list or choose a file first.';return}
+  var parsed=parseImport(text),items=parsed.items;if(!items.length){msg.textContent='No cards found in that text.';return}
+  msg.textContent='Importing '+items.length+' lines';
+  var before=JSON.stringify(coll),ready=[],need=[];
+  items.forEach(function(it){if(parsed.kind==='csv'&&it.id&&it.name&&it.set&&it.cn)ready.push(it);else need.push(it)});
+  var ids=need.map(function(it){return it.id?{id:it.id}:(it.set&&it.cn?{set:it.set,collector_number:it.cn}:(it.set?{name:it.name,set:it.set}:{name:it.name}))});
+  var p=need.length?collectionLookup(ids).then(function(cards){
+    var retry=[],ri=[];cards.forEach(function(c,i){if(!c&&need[i].name&&!('name' in ids[i]&&!ids[i].set)){retry.push({name:need[i].name});ri.push(i)}});
+    if(!retry.length)return cards;
+    return collectionLookup(retry).then(function(more){more.forEach(function(c,k){cards[ri[k]]=c});return cards});
+  }):Promise.resolve([]);
+  $('impAdd').disabled=$('impReplace').disabled=true;
+  p.then(function(cards){
+    if(replace)coll=[];
+    var n=0,missing=(parsed.bad||[]).slice();
+    ready.forEach(function(it){var isF=it.foil;addEntry({id:it.id,name:it.name,set:it.set,setName:it.setName||it.set.toUpperCase(),cn:it.cn,qty:it.qty,foil:isF,img:it.img,thumb:it.img.replace('/normal/','/small/'),usd:isF?null:(it.price||null),usdFoil:isF?(it.price||null):null,added:it.added});n+=it.qty});
+    cards.forEach(function(c,i){var it=need[i];if(!c){missing.push(it.name||it.id);return}var fin=c.finishes||['nonfoil'];var e=entryFrom(c,it.foil||fin.indexOf('nonfoil')<0,it.qty);if(it.added)e.added=it.added;addEntry(e);n+=it.qty});
+    saveColl();renderColl();
+    msg.textContent='Imported '+n+' card'+(n===1?'':'s')+'.'+(missing.length?' Not found: '+missing.slice(0,12).join('; ')+(missing.length>12?' and '+(missing.length-12)+' more':'')+'.':'');
+    toast(replace?'Collection replaced':'Import added '+n+' cards',function(){coll=JSON.parse(before);saveColl();renderColl();msg.textContent='Import undone.'});
+  }).catch(function(e){msg.textContent='Import failed: '+(e.message||e)+'. Nothing was changed.'})
+  .then(function(){$('impAdd').disabled=$('impReplace').disabled=false});
+}
+function refreshPrices(){
+  var msg=$('upMsg');if(!coll.length){msg.textContent='Nothing to refresh yet.';return}
+  var uniq={};coll.forEach(function(e){uniq[e.id]=1});var ids=Object.keys(uniq).map(function(id){return {id:id}});
+  msg.textContent='Refreshing prices for '+ids.length+' printings';$('refresh').disabled=true;
+  collectionLookup(ids).then(function(cards){
+    var by={};cards.forEach(function(c){if(c)by[c.id]=c});var n=0;
+    coll.forEach(function(e){var c=by[e.id];if(!c)return;var p=c.prices||{};e.usd=p.usd||null;e.usdFoil=p.usd_foil||p.usd_etched||null;n++});
+    saveColl();renderColl();msg.textContent='Prices refreshed for '+n+' of '+coll.length+' entries.';
+  }).catch(function(e){msg.textContent='Could not refresh prices: '+(e.message||e)}).then(function(){$('refresh').disabled=false});
+}
+function download(name,text,type){
+  try{var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);return true}catch(e){return false}
+}
+
+// ------------------------------------------------------------ toast with Undo
+var toastT=null,toastUndo=null;
+function toast(msg,undo){
+  $('toastMsg').textContent=msg;toastUndo=undo||null;$('toastUndo').hidden=!undo;$('toast').hidden=false;
+  clearTimeout(toastT);toastT=setTimeout(function(){$('toast').hidden=true;toastUndo=null},undo?6000:3500);
+}
+$('toastUndo').onclick=function(){var u=toastUndo;$('toast').hidden=true;toastUndo=null;if(u)u()};
+
+// ------------------------------------------------------------ wiring
+function showTab(name){
+  var scan=name==='scan';$('scan').hidden=!scan;$('coll').hidden=scan;
+  $('tabScan').classList.toggle('on',scan);$('tabColl').classList.toggle('on',!scan);
+  if(scan)startCamera();else{stopCamera();shown=200;renderColl()}
+}
+$('tabScan').onclick=function(){showTab('scan')};$('tabColl').onclick=function(){showTab('coll')};
+$('shutter').onclick=function(){if(sheetOpen)return;needClear=false;capture(false)};
+$('camRetry').onclick=function(){startCamera()};
+$('autoBtn').classList.toggle('on',!!prefs.auto);
+$('autoBtn').onclick=function(){prefs.auto=!prefs.auto;savePrefs();this.classList.toggle('on',prefs.auto);toast(prefs.auto?'Auto-add is on: sure matches are added right away':'Auto-add is off: you confirm each card')};
+$('torchBtn').onclick=function(){if(!track)return;torchOn=!torchOn;var b=this;track.applyConstraints({advanced:[{torch:torchOn}]}).then(function(){b.classList.toggle('on',torchOn)}).catch(function(){torchOn=false;b.classList.remove('on');toast('The light is not available on this lens')})};
+$('flipBtn').onclick=function(){if(camList.length<2)return;var curId=track&&track.getSettings&&track.getSettings().deviceId,i=0;camList.forEach(function(c,k){if(c.deviceId===curId)i=k});var next=camList[(i+1)%camList.length];prefs.cam=next.deviceId;savePrefs();stopCamera();startCamera().then(function(){toast('Lens '+(((i+1)%camList.length)+1)+' of '+camList.length)})};
+video.addEventListener('click',function(ev){ // tap to focus where the phone supports it
+  if(!track||!track.getCapabilities)return;var caps=track.getCapabilities(),r=video.getBoundingClientRect(),m=vmap();
+  var ring=$('focusRing');ring.style.left=(ev.clientX-r.left)+'px';ring.style.top=(ev.clientY-r.top)+'px';ring.style.opacity=1;setTimeout(function(){ring.style.opacity=0},500);
+  var adv={};if(caps.focusMode&&caps.focusMode.indexOf('single-shot')>=0)adv.focusMode='single-shot';else if(!caps.focusMode)return;
+  adv.pointsOfInterest=[{x:Math.min(1,Math.max(0,(ev.clientX-r.left-m.ox)/m.s/video.videoWidth)),y:Math.min(1,Math.max(0,(ev.clientY-r.top-m.oy)/m.s/video.videoHeight))}];
+  track.applyConstraints({advanced:[adv]}).then(function(){if(caps.focusMode.indexOf('continuous')>=0)setTimeout(function(){if(track)track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(function(){})},2500)}).catch(function(){});
+});
+$('photoIn').onchange=function(){
+  var f=this.files&&this.files[0];this.value='';if(!f)return;$('camErr').hidden=true;
+  var url=URL.createObjectURL(f);loadImage(url).then(function(im){
+    var sc=Math.min(1,3000/Math.max(im.naturalWidth,im.naturalHeight)),c=mk(im.naturalWidth*sc,im.naturalHeight*sc);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+    var go=function(){
+      var s2=Math.min(1,640/Math.max(c.width,c.height)),d=mk(c.width*s2,c.height*s2);d.getContext('2d').drawImage(c,0,0,d.width,d.height);
+      var q=findCard(d);if(q)q=q.map(function(p){return {x:p.x/s2,y:p.y/s2}});
+      // whole photo as fallback: the largest centered 63:88 box
+      var h=Math.min(c.height,c.width/CARD_RATIO),w=h*CARD_RATIO;
+      identify(c,q,{x:(c.width-w)/2,y:(c.height-h)/2,w:w,h:h});
+    };
+    if(cvReady)go();else{setStatus('Loading the card finder');cvPromise.then(go)}
+  }).catch(function(){toast('That file is not a picture this browser can open')});
+};
+$('qMinus').onclick=function(){if(cur&&cur.qty>1){cur.qty--;renderCur()}};
+$('qPlus').onclick=function(){if(cur){cur.qty++;renderCur()}};
+$('foilBtn').onclick=function(){if(cur){cur.foil=!cur.foil;renderCur()}};
+$('addBtn').onclick=addCurrent;
+$('skipBtn').onclick=function(){closeSheet();needClear=true};
+$('noneClose').onclick=function(){closeSheet()};
+$('printBtn').onclick=function(){$('printPanel').hidden=false;renderPrints();$('printPanel').scrollIntoView({block:'start'})};
+$('printClose').onclick=function(){$('printPanel').hidden=true};
+$('nameSearch').oninput=suggest;
+$('q').oninput=function(){shown=200;renderColl()};
+$('sort').value=prefs.sort;$('sort').onchange=function(){prefs.sort=this.value;prefs.desc=this.value==='added'||this.value==='price';savePrefs();renderColl()};
+$('dir').onclick=function(){prefs.desc=!prefs.desc;savePrefs();renderColl()};
+$('more').onclick=function(){shown+=200;renderColl()};
+var expKind='txt';
+function showExport(kind){expKind=kind;$('expText').value=kind==='csv'?exportCsv():exportText();$('expOut').hidden=false;$('expMsg').textContent=coll.length?'':'The collection is empty.'}
+$('expTxt').onclick=function(){showExport('txt')};$('expCsv').onclick=function(){showExport('csv')};
+$('expFoil').checked=!!prefs.expFoil;$('expFoil').onchange=function(){prefs.expFoil=this.checked;savePrefs();if(!$('expOut').hidden&&expKind==='txt')showExport('txt')};
+$('expCopy').onclick=function(){var t=$('expText');var done=function(){$('expMsg').textContent='Copied'};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t.value).then(done,function(){t.select();$('expMsg').textContent='Press copy on the selected text'});else{t.select();try{document.execCommand('copy');done()}catch(e){}}};
+$('expSave').onclick=function(){var ok=download('mtg-collection.'+(expKind==='csv'?'csv':'txt'),$('expText').value,expKind==='csv'?'text/csv':'text/plain');$('expMsg').textContent=ok?'Saved to your downloads':'Could not save a file here. Use Copy.'};
+$('impFile').onchange=function(){var f=this.files&&this.files[0];this.value='';if(!f)return;var r=new FileReader();r.onload=function(){$('impText').value=String(r.result);$('impMsg').textContent='Loaded '+f.name+'. Choose Add or Replace.'};r.readAsText(f)};
+$('impAdd').onclick=function(){runImport(false)};$('impReplace').onclick=function(){runImport(true)};
+$('refresh').onclick=refreshPrices;
+$('clearAll').onclick=function(){if(!coll.length)return;var before=JSON.stringify(coll);coll=[];saveColl();renderColl();toast('Collection cleared',function(){coll=JSON.parse(before);saveColl();renderColl()})};
+document.addEventListener('visibilitychange',function(){if(document.hidden)stopCamera();else if(!$('scan').hidden)startCamera()});
+cvPromise.then(function(){if(stream&&!sheetOpen&&!busy)setStatus(cvReady?'Hold a card inside the frame':'The card finder could not load. Tap the ring to scan from the frame.')});
+
+saveColl();
+window.__mtg={cleanName:cleanName,dhash:dhash,hamming:hamming,parseImport:parseImport,exportText:exportText,exportCsv:exportCsv,parseCsv:parseCsv,get coll(){return coll},ready:function(){return Promise.all([cvPromise,ocrPromise]).then(function(){return {cv:cvReady,ocr:!!ocrWorker}})}};
+startCamera();
+})();
+</script>
+</body>
+</html>
